@@ -5,8 +5,8 @@ import simplejson as json
 plugin = "PBS"
 __author__ = 'stacked <stacked.xbmc@gmail.com>'
 __url__ = 'http://code.google.com/p/plugin/'
-__date__ = '01-20-2013'
-__version__ = '3.0.10'
+__date__ = '01-16-2014'
+__version__ = '3.0.12'
 settings = xbmcaddon.Addon( id = 'plugin.video.pbs' )
 buggalo.SUBMIT_URL = 'http://www.xbmc.byethost17.com/submit.php'
 dbg = False
@@ -185,10 +185,10 @@ def build_search_directory( url, page ):
 
 @retry(TypeError)
 def find_videos( name, program_id, topic, page ):
-	if settings.getSetting("quality") == '0':
-		type = ['MPEG-4 500kbps', 'MP4 800k', HIGH]
+	if settings.getSetting("video") == '0':
+		type = ['MP4 800k', 'Legacy KIDS encoding', HIGH]
 	else:
-		type = [HIGH, 'MP4 800k', 'MPEG-4 500kbps' ]
+		type = [HIGH, 'MP4 800k', 'Legacy KIDS encoding']
 	start = str( 200 * page )
 	url = 'None'
 	backup_url = None
@@ -232,7 +232,9 @@ def find_videos( name, program_id, topic, page ):
 				backup_url = str(encoding.items()[0][1]['backup_url'])
 			infoLabels = { "Title": results['title'].encode('utf-8'), "Director": "PBS", "Studio": name, "Plot": results['long_description'].encode('utf-8'), "Aired": results['airdate'].rsplit(' ')[0], "Duration": str((int(results['mediafiles'][0]['length_mseconds'])/1000)/60) }
 			u = { 'mode': '5', 'name': results['title'].encode('utf-8'), 'url': url, 'thumb': thumb, 'plot': results['long_description'].encode('utf-8'), 'studio': name, 'backup_url': backup_url }
-			addListItem(label = results['title'].encode('utf-8'), image = thumb, url = u, isFolder = False, infoLabels = infoLabels, fanart = fanart, duration = str(int(results['mediafiles'][0]['length_mseconds'])/1000))
+			#Only show videos longer than ___ minutes
+			if int(results['mediafiles'][0]['length_mseconds'])/1000/60 > int(settings.getSetting("minimum_duration")):
+				addListItem(label = results['title'].encode('utf-8'), image = thumb, url = u, isFolder = False, infoLabels = infoLabels, fanart = fanart, duration = str(int(results['mediafiles'][0]['length_mseconds'])/1000))
 	if topic == 'False':
 		play_video( results['title'].encode('utf-8'), url, thumb, results['long_description'].encode('utf-8'), name.encode('utf-8'), None, backup_url )
 		return
@@ -255,6 +257,7 @@ def play_video( name, url, thumb, plot, studio, starttime, backup_url ):
 	print 'PBS - ' + studio + ' - ' + name
 	print url
 	playpath = False
+	defaulturl = url
 	
 	#Release Urls
 	if 'http://release.theplatform.com/' in url:
@@ -274,15 +277,6 @@ def play_video( name, url, thumb, plot, studio, starttime, backup_url ):
 		try:
 			base = re.compile( '<meta base="(.+?)" />' ).findall( data )[0]
 			src = re.compile( '<ref src="(.+?)" title="(.+?)" (author)?' ).findall( data )[0][0]
-		except:
-			print 'PBS - Release backup_url'
-			if backup_url != 'None':
-				url = backup_url
-				backup_url = 'None'
-			else:
-				url = 'None'
-				backup_url = 'None'
-		if url != 'None' and 'http://urs.pbs.org/redirect/' not in url:
 			if base == 'http://ad.doubleclick.net/adx/':
 				src_data = src.split( "&lt;break&gt;" )
 				url = src_data[0] + "mp4:" + src_data[1].replace('mp4:','')
@@ -291,6 +285,14 @@ def play_video( name, url, thumb, plot, studio, starttime, backup_url ):
 			else:
 				url = base
 				playpath = "mp4:" + src.replace('mp4:','')
+		except:
+			print 'PBS - Release backup_url'
+			if backup_url != 'None':
+				url = backup_url
+				backup_url = 'None'
+			else:
+				url = 'None'
+				backup_url = 'None'
 	
 	#Empty Urls
 	if url == 'None':
@@ -342,6 +344,7 @@ def play_video( name, url, thumb, plot, studio, starttime, backup_url ):
 		dialog = xbmcgui.Dialog()
 		ok = dialog.ok(plugin , settings.getLocalizedString( 30008 ))
 		ok = dialog.ok(plugin, settings.getLocalizedString( 30051 ))
+		buggalo.addExtraData('defaulturl', defaulturl)
 		buggalo.addExtraData('url', url)
 		buggalo.addExtraData('info', studio + ' - ' + name)
 		raise Exception("backup_url ERROR")
